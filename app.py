@@ -13,7 +13,8 @@ ss.setdefault("pending_attachments", [])      # staged by the + modal, consumed 
 ss.setdefault("uploader_key", f"uploader_{time.time_ns()}")
 ss.setdefault("composer_input_value", "")
 ss.setdefault("model_choice", "gemini-2.5-flash")
-ss.setdefault("send_flag", False)             # set True when Enter is pressed
+ss.setdefault("send_flag", False)
+ss.setdefault("input_key", f"composer_{time.time_ns()}")             # set True when Enter is pressed
 
 def _send_on_enter():
     ss.send_flag = True
@@ -35,8 +36,10 @@ header[data-testid="stHeader"] { display: none !important; }
 
 /* Leave room for our fixed app bar and fixed composer */
 .block-container {
-  padding-top: 64px;        /* height of our fixed app bar */
-  padding-bottom: 300px;    /* >= composer height to avoid overlap */
+  padding-top: 0px;        /* height of our fixed app bar */
+  padding-bottom: 15px;    /* >= composer height to avoid overlap */
+  padding-left: 30px;
+  padding-right: 30px;
   max-width: 1200px;
 }
 
@@ -53,10 +56,7 @@ header[data-testid="stHeader"] { display: none !important; }
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 /* ~1/8 page width for model select */
-.model-box { width: clamp(220px, 12.5vw, 320px); }
-.model-box [data-testid="stSelectbox"] { width: 100% !important; }
-.model-box [data-testid="stSelectbox"] > div { width: 100% !important; }
-.model-box [data-baseweb="select"] { width: 100% !important; }
+.model-box { width: 100%; max-width: 280px; }
 .appbar-actions { display: flex; align-items: center; gap: 8px; }
 
 /* ---------- Greeting + 2x2 suggestions ---------- */
@@ -73,16 +73,27 @@ header[data-testid="stHeader"] { display: none !important; }
 }
 .chips-grid .stButton button { width: 100%; }
 
+/* ---------- Header ---------- */
+.header-row { margin-top: .25rem; }
+.model-box .stSelectbox, .model-box .stSelectbox > div, .model-box div[data-baseweb="select"] {
+  min-width: 260px !important;
+  max-width: 260px !important;
+}
+.header-right { display:flex; justify-content:flex-end; align-items:center; }
+
 /* ---------- Fixed Composer ---------- */
 .composer-shell{
-  position: fixed; left:0; right:0; bottom:0; z-index:1000;
+  position: fixed; left:0; right:0; bottom:0; z-index:3000; transform: translateZ(0);
   background: linear-gradient(180deg, rgba(10,14,20,0.00) 0%, rgba(10,14,20,0.72) 35%, rgba(10,14,20,0.96) 100%);
   padding: 10px 0 calc(env(safe-area-inset-bottom,0) + 10px);
 }
-.composer-inner{ max-width: min(1200px, 96vw); width: 100%; margin: 0 auto; padding: 0 16px; }
-.composer-card{
-  border-radius:16px; padding:10px; background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.10);
+.composer-inner{ max-width: min(1200px, 96vw); width: 100%; margin: 0 auto; }
+
+/* Style the bordered container we're using for the composer card */
+.composer-inner > div[data-testid="stAppViewContainer"] > .st-emotion-cache-1jicfl2 {
+  background:rgba(255,255,255,0.04) !important;
+  border:1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 16px !important;
 }
 
 /* Row: ＋ | input | Send */
@@ -109,45 +120,74 @@ header[data-testid="stHeader"] { display: none !important; }
   color: white; font-weight: 600;
 }
 .send-btn button:hover{ filter: brightness(1.05); }
+
+.brand {
+  font-weight: 800; font-size: 40px; letter-spacing: .3px;
+  background: linear-gradient(90deg, #7c3aed 0%, #f59e0b 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+
+  /* --- VERTICAL & HORIZONTAL CENTERING STYLES --- */
+  display: flex; /* Enables flex context */
+  justify-content: center; /* Centers horizontally */
+  align-items: center; /* Centers vertically */
+  height: 100px; /* Define a height for vertical centering to be visible */
+}
+
+/* keep this in your CSS */
+.composer-shell{
+  position: fixed; left:0; right:0; bottom:0;
+  z-index: 3000;               /* high enough to float above app content */
+  transform: translateZ(0);    /* creates its own layer; cheap perf win */
+  /* ... your existing gradient + padding ... */
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ------------------ Fixed App Bar (our header) ------------------
-st.markdown('<div class="appbar"><div class="appbar-inner">', unsafe_allow_html=True)
+# ------------------ Header: model left, usage right ------------------
+st.markdown('<div class="header-row">', unsafe_allow_html=True)
+left, spacer, right = st.columns([1, 6, 1], gap="small")
 
-# Left: model dropdown (clamped width)
-st.markdown('<div class="model-box">', unsafe_allow_html=True)
-ss.model_choice = st.selectbox(
-    "Model",
-    ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-preview-09-2025", "gemini-2.0-flash"],
-    index=["gemini-2.5-flash","gemini-2.5-pro","gemini-2.5-flash-preview-09-2025","gemini-2.0-flash"].index(ss.model_choice),
-    help="Choose a Gemini model.",
-)
+with spacer:
+    st.markdown('<div class="brand">Gemini Bot</div>', unsafe_allow_html=True)
+
+with left:
+    st.markdown('<div class="model-box">', unsafe_allow_html=True)
+    model_choice = st.selectbox(
+        "Model",
+        options=[
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash-preview-09-2025",
+            "gemini-2.0-flash"
+        ],
+        index=0,
+        help="Choose a Gemini model."
+    )
+    ss.model_choice = model_choice
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with right:
+    @st.dialog("Token usage")
+    def usage_modal():
+        st.write("Per-turn and session totals will appear after model calls.")
+        st.metric("Input", st.session_state.usage_totals["input"])
+        st.metric("Output", st.session_state.usage_totals["output"])
+        st.metric("Reasoning", st.session_state.usage_totals["reasoning"])
+    st.markdown('<div class="header-right">', unsafe_allow_html=True)
+    if st.button("Usage"):
+        usage_modal()
+    st.markdown('</div>', unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)
-
-# Right: Usage button
-st.markdown('<div class="appbar-actions">', unsafe_allow_html=True)
-
-@st.dialog("Token usage")
-def usage_modal():
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Input", ss.usage_totals["input"])
-    c2.metric("Output", ss.usage_totals["output"])
-    c3.metric("Reasoning", ss.usage_totals["reasoning"])
-
-if st.button("Usage"):
-    usage_modal()
-
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ------------------ Greeting + 2x2 Chips (before first message only) ------------------
 if not ss.first_message_sent and len(ss.messages) == 0:
-    st.markdown('<div class="hero-wrap"><div class="hero-inner">', unsafe_allow_html=True)
+    st.markdown('<div class="hero-inner">', unsafe_allow_html=True)
     st.markdown("## Hello there!")
     st.markdown("#### How can I help you today?")
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="chips-grid">', unsafe_allow_html=True)
     suggestions = [
@@ -203,35 +243,63 @@ def attach_modal():
             st.markdown(f"<span class='pill' style='display:inline-block;padding:6px 10px;margin:4px 6px 0 0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);border-radius:999px;font-size:13px;'>{a['name']}</span>", unsafe_allow_html=True)
 
 # ------------------ Fixed Composer ------------------
-st.markdown('<div class="composer-shell"><div class="composer-inner"><div class="composer-card">', unsafe_allow_html=True)
+st.markdown('<div id="composer-shell" class="composer-shell"><div class="composer-inner">', unsafe_allow_html=True)
 
-col_plus, col_text, col_send = st.columns([0.08, 0.72, 0.20], gap="small")
+with st.container(border=True):
+    col_plus, col_text, col_send = st.columns([0.08, 0.72, 0.20], gap="small")
+    
+    with col_plus:
+        st.markdown('<div class="plus-btn">', unsafe_allow_html=True)
+        if st.button("＋", key="plus_btn", help="Attach files (opens modal)"):
+            attach_modal()
+        if ss.pending_attachments:
+            st.markdown(f"<span class='badge'>{len(ss.pending_attachments)}</span>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col_text:
+        st.markdown('<div class="composer-input">', unsafe_allow_html=True)
+        ss.composer_input_value = st.text_input(
+            "Send a message...",
+            value=ss.composer_input_value,
+            label_visibility="collapsed",
+            key=ss.input_key,
+            on_change=_send_on_enter,
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col_send:
+        st.markdown('<div class="send-btn">', unsafe_allow_html=True)
+        send_click = st.button("Send ➤", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-with col_plus:
-    st.markdown('<div class="plus-btn">', unsafe_allow_html=True)
-    if st.button("＋", key="plus_btn", help="Attach files (opens modal)"):
-        attach_modal()
-    if ss.pending_attachments:
-        st.markdown(f"<span class='badge'>{len(ss.pending_attachments)}</span>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div></div>', unsafe_allow_html=True) # Closes composer-shell and composer-inner
 
-with col_text:
-    st.markdown('<div class="composer-input">', unsafe_allow_html=True)
-    ss.composer_input_value = st.text_input(
-        "Send a message...",
-        value=ss.composer_input_value,
-        label_visibility="collapsed",
-        key="composer_input_widget",
-        on_change=_send_on_enter,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+# --- JS to move the composer shell outside the main scrollable block ---
+st.html("""
+<script>
+(function() {
+  // Move the composer shell under document.body so it can be truly viewport-fixed.
+  function move() {
+    const shell = document.getElementById('composer-shell');
+    if (!shell) return;
 
-with col_send:
-    st.markdown('<div class="send-btn">', unsafe_allow_html=True)
-    send_click = st.button("Send ➤", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    // Already under <body>? Then nothing to do.
+    if (shell.parentNode === document.body) return;
 
-st.markdown('</div></div></div>', unsafe_allow_html=True)
+    // Move it.
+    document.body.appendChild(shell);
+  }
+
+  // Try immediately, then on next frame (helps after Streamlit lays out)
+  move(); requestAnimationFrame(move);
+
+  // On re-renders, Streamlit may re-insert nodes: keep it under <body>.
+  const mo = new MutationObserver(move);
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+})();
+</script>
+""")
+st.write("block padding-bottom (CSS): 300px (as set)")
 
 # ------------------ Send Handler (Enter or button) ------------------
 should_send = ss.send_flag or send_click
@@ -255,4 +323,5 @@ if should_send and ss.composer_input_value.strip():
     # reset input + flag
     ss.composer_input_value = ""
     ss.send_flag = False
+    ss.input_key = f"composer_{time.time_ns()}" 
     st.rerun()
