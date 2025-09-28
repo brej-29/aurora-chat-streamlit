@@ -1,5 +1,17 @@
 import time
 import streamlit as st
+from dotenv import load_dotenv
+import os
+from backend.genai_backend import get_client, upload_bytes, call_model, UploadedRef
+# Load .env (if present) and try Streamlit secrets
+load_dotenv(override=True)
+
+GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY") # 2) .env or environment
+
+if GOOGLE_API_KEY:
+    _ = get_client(api_key=GOOGLE_API_KEY)
+else:
+    st.warning("Add your Google API key in .env, st.secrets, or the field above.")
 
 # ------------------ Page setup ------------------
 st.set_page_config(page_title="Gemini Chat", page_icon="💬", layout="wide")
@@ -38,9 +50,9 @@ header[data-testid="stHeader"] { display: none !important; }
 .block-container {
   padding-top: 0px;        /* height of our fixed app bar */
   padding-bottom: 15px;    /* >= composer height to avoid overlap */
-  padding-left: 30px;
-  padding-right: 30px;
-  max-width: 1200px;
+  padding-left: 20px;
+  padding-right: 20px;
+  max-width: 1500px;
 }
 
 /* ---------- Fixed App Bar ---------- */
@@ -147,7 +159,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 # ------------------ Fixed App Bar (our header) ------------------
 # ------------------ Header: model left, usage right ------------------
 st.markdown('<div class="header-row">', unsafe_allow_html=True)
-left, spacer, right = st.columns([1, 6, 1], gap="small")
+left, spacer, right = st.columns([2, 6, 1], gap="small")
 
 with spacer:
     st.markdown('<div class="brand">Gemini Bot</div>', unsafe_allow_html=True)
@@ -246,7 +258,8 @@ def attach_modal():
 st.markdown('<div id="composer-shell" class="composer-shell"><div class="composer-inner">', unsafe_allow_html=True)
 
 with st.container(border=True):
-    col_plus, col_text, col_send = st.columns([0.08, 0.72, 0.20], gap="small")
+    
+    col_plus, col_text, col_send = st.columns([0.05, 0.89, 0.20], gap="small")
     
     with col_plus:
         st.markdown('<div class="plus-btn">', unsafe_allow_html=True)
@@ -274,32 +287,6 @@ with st.container(border=True):
 
 st.markdown('</div></div>', unsafe_allow_html=True) # Closes composer-shell and composer-inner
 
-# --- JS to move the composer shell outside the main scrollable block ---
-st.html("""
-<script>
-(function() {
-  // Move the composer shell under document.body so it can be truly viewport-fixed.
-  function move() {
-    const shell = document.getElementById('composer-shell');
-    if (!shell) return;
-
-    // Already under <body>? Then nothing to do.
-    if (shell.parentNode === document.body) return;
-
-    // Move it.
-    document.body.appendChild(shell);
-  }
-
-  // Try immediately, then on next frame (helps after Streamlit lays out)
-  move(); requestAnimationFrame(move);
-
-  // On re-renders, Streamlit may re-insert nodes: keep it under <body>.
-  const mo = new MutationObserver(move);
-  mo.observe(document.documentElement, { childList: true, subtree: true });
-})();
-</script>
-""")
-st.write("block padding-bottom (CSS): 300px (as set)")
 
 # ------------------ Send Handler (Enter or button) ------------------
 should_send = ss.send_flag or send_click
@@ -307,18 +294,45 @@ if should_send and ss.composer_input_value.strip():
     text = ss.composer_input_value.strip()
 
     # consume staged files ONCE
+    # consume staged files ONCE + upload them to Files API
     msg_attachments = ss.pending_attachments[:] if ss.pending_attachments else []
     ss.pending_attachments = []
 
+    uploaded_refs: list[UploadedRef] = []
+    for a in msg_attachments:
+        # our structure: {"type": "image"/"audio"/"pdf", "name": ..., "preview": bytes, "file_id": None}
+        # decide MIME by type
+        mime = (
+            "image/png" if a["name"].lower().endswith(".png") else
+            "image/jpeg" if a["name"].lower().endswith((".jpg", ".jpeg")) else
+            "image/webp" if a["name"].lower().endswith(".webp") else
+            "audio/mpeg" if a["name"].lower().endswith(".mp3") else
+            "audio/wav"  if a["name"].lower().endswith(".wav") else
+            "audio/mp4"  if a["name"].lower().endswith(".m4a") else
+            "application/pdf" if a["name"].lower().endswith(".pdf") else
+            "application/octet-stream"
+        )
+        try:
+            uploaded_refs.append(upload_bytes(a["name"], a["preview"], mime))
+        except Exception as exc:
+            st.error(f"Failed to upload '{a['name']}'. You can retry or send without it. Details: {exc}")
+
+    # --- Call Gemini with optional files and push assistant message ---
+    reply_text, usage = call_model(ss.model_choice, text, uploads=uploaded_refs)
+
     ss.messages.append({
-        "role": "user",
-        "text": text,
-        "attachments": msg_attachments,
+        "role": "assistant",
+        "text": reply_text or "_(no text response)_",
+        "attachments": [],  # assistant may also return files in other flows; not used here
         "model": ss.model_choice,
-        "usage": {"input": None, "output": None, "reasoning": None, "source": None},
+        "usage": {"input": usage.prompt, "output": usage.response, "reasoning": usage.reasoning, "total": usage.total},
         "ts": time.time()
     })
-    ss.first_message_sent = True
+
+    # Update the running totals for your Usage dialog
+    ss.usage_totals["input"]     += int(usage.prompt or 0)
+    ss.usage_totals["output"]    += int(usage.response or 0)
+    ss.usage_totals["reasoning"] += int(usage.reasoning or 0)
 
     # reset input + flag
     ss.composer_input_value = ""
