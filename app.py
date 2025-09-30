@@ -460,77 +460,48 @@ st.html("""
 <script>
 (function() {
   const btn = document.getElementById('scrollDownBtn');
+  const sentinel = document.getElementById('chat-bottom-sentinel');
+  if (!btn || !sentinel) return;
 
-  /** Return the element that actually scrolls in this Streamlit build */
-  function getScrollRoot() {
-    // 1) Most browsers
-    if (document.scrollingElement) return document.scrollingElement;
+  // Show/hide button depending on whether the bottom sentinel is on screen
+  const io = new IntersectionObserver((entries) => {
+    const onScreen = entries.some(e => e.isIntersecting);
+    if (onScreen) btn.classList.add('hidden'); else btn.classList.remove('hidden');
+  }, {root: null, threshold: 0.01});
+  io.observe(sentinel);
 
-    // 2) Fallbacks
-    if (document.documentElement) return document.documentElement;
-    if (document.body) return document.body;
-    return window; // last-ditch
-  }
-
-  /** Try to find a scrollable container inside Streamlit's app if the page isn't scrolling */
-  function findScrollableInApp() {
-    const app = document.querySelector('.stApp');
-    if (!app) return null;
-
-    // Look for a child that is actually scrollable
-    const probe = app.querySelector('[data-testid="stAppViewBlockContainer"], [data-testid="stAppViewContainer"], section.main, .block-container, .st-emotion-cache-18kf3ut, .st-emotion-cache-1gz5zxc');
-    const cand = probe || app;
-    const style = getComputedStyle(cand);
-    const isScrollable = /(auto|scroll)/.test(style.overflowY) || cand.scrollHeight > cand.clientHeight + 4;
-    return isScrollable ? cand : null;
-  }
-
-  // Decide which node really scrolls
-  let root = getScrollRoot();
-  // If the document doesn't scroll (common in some Streamlit layouts), switch to inner container
-  if (root.scrollHeight <= root.clientHeight + 4) {
-    const inner = findScrollableInApp();
-    if (inner) root = inner;
-  }
-
-  function atBottom(){
-    const gap = (root.scrollHeight - root.clientHeight) - root.scrollTop;
-    return gap < 6;
-  }
-
-  function refresh(){
-    if (atBottom()) btn.classList.add('hidden');
-    else btn.classList.remove('hidden');
-  }
-
-  // Listen to the right thing
-  (root === window ? window : root).addEventListener('scroll', refresh, {passive:true});
-  window.addEventListener('resize', refresh);
-
-  // Also observe DOM changes to re-evaluate when new messages arrive
-  const mo = new MutationObserver(() => setTimeout(refresh, 30));
-  mo.observe(document.body, {childList: true, subtree: true});
-
+  // Scroll to bottom — let the browser choose the right scrollable ancestor
   btn.addEventListener('click', () => {
-    const to = root.scrollHeight;
-    if (root === window || root === document.body || root === document.documentElement) {
-      window.scrollTo({ top: to, behavior: 'smooth' });
-    } else {
-      root.scrollTo({ top: to, behavior: 'smooth' });
+    try {
+      sentinel.scrollIntoView({behavior: 'smooth', block: 'end', inline: 'nearest'});
+      btn.classList.add('hidden');
+    } catch (e) {
+      // very old browsers fallback
+      window.scrollTo(0, document.documentElement.scrollHeight || document.body.scrollHeight);
     }
-    btn.classList.add('hidden'); // feel responsive
   });
 
-  // Initial passes (Streamlit reflows a bit on load)
-  setTimeout(refresh, 50);
-  setTimeout(refresh, 200);
-  refresh();
+  // Keep it responsive to layout reflows (Streamlit reruns)
+  const mo = new MutationObserver(() => {
+    // re-trigger IO check on layout mutations
+    const rect = sentinel.getBoundingClientRect();
+    const atBottom = rect.bottom <= (window.innerHeight + 6);
+    if (atBottom) btn.classList.add('hidden'); else btn.classList.remove('hidden');
+  });
+  mo.observe(document.body, {childList: true, subtree: true});
+
+  // Initial passes
+  setTimeout(() => {
+    const rect = sentinel.getBoundingClientRect();
+    const atBottom = rect.bottom <= (window.innerHeight + 6);
+    if (atBottom) btn.classList.add('hidden'); else btn.classList.remove('hidden');
+  }, 50);
 })();
 </script>
 """)
 
-
-
+# === Bottom sentinel (anchor for smooth scroll) ===
+st.markdown("<div id='chat-bottom-sentinel' style='height:1px'></div>", unsafe_allow_html=True)
 
 # ------------------ Composer ------------------
 st.markdown('<div id="composer-shell" class="composer-shell"><div class="composer-inner">', unsafe_allow_html=True)
