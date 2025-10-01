@@ -2,6 +2,7 @@ import time
 import os
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit.components.v1 import html as comp_html
 
 from backend.genai_backend import (
     get_client, upload_bytes, call_model, stream_model, UploadedRef
@@ -402,6 +403,107 @@ if ss.get("pending_request"):
             ss.pending_request = None
             st.rerun()
 
+# === Bottom sentinel (anchor for smooth scroll) ===
+st.markdown("<div id='chat-bottom-sentinel' style='height:1px'></div>", unsafe_allow_html=True)
+# --- floating scroll-to-bottom button ---
+comp_html("""
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;">
+    <script>
+    (function() {
+      // --- id constants ---
+      var BTN_ID = 'scrollDownBtn';
+      var SENTINEL_ID = 'chat-bottom-sentinel';
+
+      // remove any previous injected button to avoid duplicates on rerun
+      var pDoc = window.parent.document;
+      var old = pDoc.getElementById(BTN_ID);
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+
+      // create & style the floating button
+      var btn = pDoc.createElement('button');
+      btn.id = BTN_ID;
+      btn.setAttribute('aria-label', 'Scroll to bottom');
+      btn.textContent = '▼';
+
+      // NOTE: mirror your CSS class here so we don't depend on the app's CSS loading order
+      btn.style.position = 'fixed';
+      btn.style.right = '18px';
+      btn.style.bottom = '86px';
+      btn.style.zIndex = '9999';
+      btn.style.border = '0';
+      btn.style.borderRadius = '999px';
+      btn.style.padding = '10px 12px';
+      btn.style.background = 'linear-gradient(90deg, #7c3aed 0%, #f59e0b 100%)';
+      btn.style.color = '#fff';
+      btn.style.fontWeight = '700';
+      btn.style.boxShadow = '0 6px 18px rgba(0,0,0,.35)';
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '0';
+      btn.style.transform = 'scale(.96)';
+      btn.style.transition = 'opacity .18s, transform .18s';
+      btn.style.pointerEvents = 'none'; // start hidden
+
+      pDoc.body.appendChild(btn);
+
+      function showBtn() {
+        btn.style.opacity = '1';
+        btn.style.transform = 'scale(1)';
+        btn.style.pointerEvents = 'auto';
+      }
+      function hideBtn() {
+        btn.style.opacity = '0';
+        btn.style.transform = 'scale(.96)';
+        btn.style.pointerEvents = 'none';
+      }
+
+      // find or re-find the sentinel in parent document
+      function getSentinel() {
+        return pDoc.getElementById(SENTINEL_ID);
+      }
+
+      // visibility logic: button shows when sentinel is NOT in view
+      function refreshVisibility() {
+        var s = getSentinel();
+        if (!s) { hideBtn(); return; }
+        var rect = s.getBoundingClientRect();
+        var atBottom = rect.bottom <= (window.parent.innerHeight + 6);
+        if (atBottom) hideBtn(); else showBtn();
+      }
+
+      // click behavior: scroll sentinel into view (parent chooses the correct scroll container)
+      btn.addEventListener('click', function() {
+        var s = getSentinel();
+        if (s && s.scrollIntoView) {
+          s.scrollIntoView({behavior: 'smooth', block: 'end', inline: 'nearest'});
+        } else {
+          // last-resort fallback
+          var docEl = pDoc.scrollingElement || pDoc.documentElement || pDoc.body;
+          window.parent.scrollTo({ top: docEl.scrollHeight, behavior: 'smooth' });
+        }
+        hideBtn(); // feel responsive
+      });
+
+      // observe parent scrolling + layout changes
+      window.parent.addEventListener('scroll', refreshVisibility, {passive:true});
+      window.parent.addEventListener('resize', refreshVisibility);
+
+      // respond to Streamlit reflows: watch the parent DOM
+      var mo = new window.parent.MutationObserver(function() {
+        // slight delay so layout can settle
+        setTimeout(refreshVisibility, 30);
+      });
+      mo.observe(pDoc.body, {childList: true, subtree: true});
+
+      // initial passes
+      setTimeout(refreshVisibility, 30);
+      setTimeout(refreshVisibility, 120);
+    })();
+    </script>
+  </body>
+</html>
+""", height=0, width=0)
 
 
 # ------------------ Attach Modal ------------------
@@ -454,54 +556,6 @@ def attach_modal():
             ss.staged_files = []
             st.rerun()
 
-# --- floating scroll-to-bottom button ---
-st.html("""
-<button id="scrollDownBtn" class="scroll-down-btn" aria-label="Scroll to bottom">▼</button>
-<script>
-(function() {
-  const btn = document.getElementById('scrollDownBtn');
-  const sentinel = document.getElementById('chat-bottom-sentinel');
-  if (!btn || !sentinel) return;
-
-  // Show/hide button depending on whether the bottom sentinel is on screen
-  const io = new IntersectionObserver((entries) => {
-    const onScreen = entries.some(e => e.isIntersecting);
-    if (onScreen) btn.classList.add('hidden'); else btn.classList.remove('hidden');
-  }, {root: null, threshold: 0.01});
-  io.observe(sentinel);
-
-  // Scroll to bottom — let the browser choose the right scrollable ancestor
-  btn.addEventListener('click', () => {
-    try {
-      sentinel.scrollIntoView({behavior: 'smooth', block: 'end', inline: 'nearest'});
-      btn.classList.add('hidden');
-    } catch (e) {
-      // very old browsers fallback
-      window.scrollTo(0, document.documentElement.scrollHeight || document.body.scrollHeight);
-    }
-  });
-
-  // Keep it responsive to layout reflows (Streamlit reruns)
-  const mo = new MutationObserver(() => {
-    // re-trigger IO check on layout mutations
-    const rect = sentinel.getBoundingClientRect();
-    const atBottom = rect.bottom <= (window.innerHeight + 6);
-    if (atBottom) btn.classList.add('hidden'); else btn.classList.remove('hidden');
-  });
-  mo.observe(document.body, {childList: true, subtree: true});
-
-  // Initial passes
-  setTimeout(() => {
-    const rect = sentinel.getBoundingClientRect();
-    const atBottom = rect.bottom <= (window.innerHeight + 6);
-    if (atBottom) btn.classList.add('hidden'); else btn.classList.remove('hidden');
-  }, 50);
-})();
-</script>
-""")
-
-# === Bottom sentinel (anchor for smooth scroll) ===
-st.markdown("<div id='chat-bottom-sentinel' style='height:1px'></div>", unsafe_allow_html=True)
 
 # ------------------ Composer ------------------
 st.markdown('<div id="composer-shell" class="composer-shell"><div class="composer-inner">', unsafe_allow_html=True)
