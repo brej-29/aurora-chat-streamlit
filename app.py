@@ -2,10 +2,11 @@ import time
 import os
 import streamlit as st
 from dotenv import load_dotenv
-from streamlit.components.v1 import html as comp_html
+from frontend.scroll import scroll_smooth_once
+
 
 from backend.genai_backend import (
-    get_client, upload_bytes, call_model, stream_model, UploadedRef
+    get_client, upload_bytes, stream_model, UploadedRef
 )
 
 # ---- Env & client ----
@@ -87,8 +88,8 @@ header[data-testid="stHeader"] { display: none !important; }
 .block-container {
   padding-top: 0px;
   padding-bottom: 15px;
-  padding-left: 20px;
-  padding-right: 20px;
+  padding-left: 100px;
+  padding-right: 100px;
   max-width: 1500px;
 }
 
@@ -188,6 +189,10 @@ header[data-testid="stHeader"] { display: none !important; }
 .dot:nth-child(2){ animation-delay: .2s; }
 .dot:nth-child(3){ animation-delay: .4s; }
 
+.hero-inner {
+  text-align: center;
+}
+
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -197,7 +202,7 @@ st.markdown('<div class="header-row">', unsafe_allow_html=True)
 left, spacer, right = st.columns([2, 6, 2], gap="small")
 
 with spacer:
-    st.markdown('<div class="brand">Gemini Bot</div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand">Aurora Chat</div>', unsafe_allow_html=True)
 
 with left:
     st.markdown('<div class="model-box">', unsafe_allow_html=True)
@@ -242,10 +247,12 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------ Greeting + suggestions (first run only) ------------------
 if not ss.first_message_sent and len(ss.messages) == 0:
-    st.markdown('<div class="hero-inner">', unsafe_allow_html=True)
-    st.markdown("## Hello there!")
-    st.markdown("#### How can I help you today?")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="hero-inner">
+    <h2>Hello there!</h2>
+    <h4>How can I help you today?</h4>
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown('<div class="chips-grid">', unsafe_allow_html=True)
     suggestions = [
@@ -291,11 +298,14 @@ for m in ss.messages:
 if ss.get("pending_request"):
     req = ss.pending_request
 
+
     # 1) show the thinking bubble right under the last user message
     with st.chat_message("assistant"):
         ph = st.empty()
         # loader (visible until first tokens arrive)
         ph.markdown("**Thinking**<span class='dot'>.</span><span class='dot'>.</span><span class='dot'>.</span>", unsafe_allow_html=True)
+
+        scroll_smooth_once()
 
         # 2) upload files, then stream the model output into `ph`
         uploaded_refs: list[UploadedRef] = []
@@ -356,6 +366,8 @@ if ss.get("pending_request"):
                 if chunk:
                     full_text += chunk
                     ph.markdown(full_text)
+                    # keep view following while streaming (no timers)
+                    #scroll_smooth_once()
 
             # 3) replace the thinking bubble with the final streamed content in history
             ss.messages.append({
@@ -376,6 +388,8 @@ if ss.get("pending_request"):
                 ss.usage_totals["input"]     += int(final_usage.prompt or 0)
                 ss.usage_totals["output"]    += int(final_usage.response or 0)
                 ss.usage_totals["reasoning"] += int(final_usage.reasoning or 0)
+            scroll_smooth_once()
+
 
         except Exception as exc:
             kind = exc.__class__.__name__
@@ -398,6 +412,7 @@ if ss.get("pending_request"):
                 "usage": {},
                 "ts": time.time()
             })
+            scroll_smooth_once()
 
         finally:
             ss.pending_request = None
@@ -405,105 +420,6 @@ if ss.get("pending_request"):
 
 # === Bottom sentinel (anchor for smooth scroll) ===
 st.markdown("<div id='chat-bottom-sentinel' style='height:1px'></div>", unsafe_allow_html=True)
-# --- floating scroll-to-bottom button ---
-comp_html("""
-<!doctype html>
-<html>
-  <body style="margin:0;padding:0;">
-    <script>
-    (function() {
-      // --- id constants ---
-      var BTN_ID = 'scrollDownBtn';
-      var SENTINEL_ID = 'chat-bottom-sentinel';
-
-      // remove any previous injected button to avoid duplicates on rerun
-      var pDoc = window.parent.document;
-      var old = pDoc.getElementById(BTN_ID);
-      if (old && old.parentNode) old.parentNode.removeChild(old);
-
-      // create & style the floating button
-      var btn = pDoc.createElement('button');
-      btn.id = BTN_ID;
-      btn.setAttribute('aria-label', 'Scroll to bottom');
-      btn.textContent = '▼';
-
-      // NOTE: mirror your CSS class here so we don't depend on the app's CSS loading order
-      btn.style.position = 'fixed';
-      btn.style.right = '18px';
-      btn.style.bottom = '86px';
-      btn.style.zIndex = '9999';
-      btn.style.border = '0';
-      btn.style.borderRadius = '999px';
-      btn.style.padding = '10px 12px';
-      btn.style.background = 'linear-gradient(90deg, #7c3aed 0%, #f59e0b 100%)';
-      btn.style.color = '#fff';
-      btn.style.fontWeight = '700';
-      btn.style.boxShadow = '0 6px 18px rgba(0,0,0,.35)';
-      btn.style.cursor = 'pointer';
-      btn.style.opacity = '0';
-      btn.style.transform = 'scale(.96)';
-      btn.style.transition = 'opacity .18s, transform .18s';
-      btn.style.pointerEvents = 'none'; // start hidden
-
-      pDoc.body.appendChild(btn);
-
-      function showBtn() {
-        btn.style.opacity = '1';
-        btn.style.transform = 'scale(1)';
-        btn.style.pointerEvents = 'auto';
-      }
-      function hideBtn() {
-        btn.style.opacity = '0';
-        btn.style.transform = 'scale(.96)';
-        btn.style.pointerEvents = 'none';
-      }
-
-      // find or re-find the sentinel in parent document
-      function getSentinel() {
-        return pDoc.getElementById(SENTINEL_ID);
-      }
-
-      // visibility logic: button shows when sentinel is NOT in view
-      function refreshVisibility() {
-        var s = getSentinel();
-        if (!s) { hideBtn(); return; }
-        var rect = s.getBoundingClientRect();
-        var atBottom = rect.bottom <= (window.parent.innerHeight + 6);
-        if (atBottom) hideBtn(); else showBtn();
-      }
-
-      // click behavior: scroll sentinel into view (parent chooses the correct scroll container)
-      btn.addEventListener('click', function() {
-        var s = getSentinel();
-        if (s && s.scrollIntoView) {
-          s.scrollIntoView({behavior: 'smooth', block: 'end', inline: 'nearest'});
-        } else {
-          // last-resort fallback
-          var docEl = pDoc.scrollingElement || pDoc.documentElement || pDoc.body;
-          window.parent.scrollTo({ top: docEl.scrollHeight, behavior: 'smooth' });
-        }
-        hideBtn(); // feel responsive
-      });
-
-      // observe parent scrolling + layout changes
-      window.parent.addEventListener('scroll', refreshVisibility, {passive:true});
-      window.parent.addEventListener('resize', refreshVisibility);
-
-      // respond to Streamlit reflows: watch the parent DOM
-      var mo = new window.parent.MutationObserver(function() {
-        // slight delay so layout can settle
-        setTimeout(refreshVisibility, 30);
-      });
-      mo.observe(pDoc.body, {childList: true, subtree: true});
-
-      // initial passes
-      setTimeout(refreshVisibility, 30);
-      setTimeout(refreshVisibility, 120);
-    })();
-    </script>
-  </body>
-</html>
-""", height=0, width=0)
 
 
 # ------------------ Attach Modal ------------------
@@ -555,6 +471,7 @@ def attach_modal():
             # discard staging
             ss.staged_files = []
             st.rerun()
+
 
 
 # ------------------ Composer ------------------
