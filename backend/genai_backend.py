@@ -4,7 +4,7 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Tuple, Any, Generator
+from typing import Iterable, Optional, Tuple, Any, Generator
 
 from google import genai
 from google.genai import types, errors
@@ -112,6 +112,7 @@ def build_contents(prompt: str, uploads: Iterable[UploadedRef] | None) -> list[A
             parts.append(u.file_obj)   # SDK accepts the File directly
     return parts
 
+# The following currently not in sure, but can be used to replace the stream_model when streaming is not needed
 def call_model(model: str, prompt: str, uploads: Iterable[UploadedRef] | None = None) -> Tuple[str, Usage]:
     """
     Non-streaming call. Returns (text, Usage).
