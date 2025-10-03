@@ -38,6 +38,7 @@
 * [License](#license)
 * [Contact](#contact)
 * [Contributing](#contributing)
+* [Screenshots](#screenshots)
 
 ---
 
@@ -175,3 +176,18 @@ Contributions are very welcome! If you’d like to improve the UX, add tests, wi
 3) Open a PR with a clear description and screenshots where relevant.
 
 If you use Aurora in your own project, I’d love to hear about it — please share a link! 🎉
+
+---
+
+## **Screenshots**
+
+
+<img width="1915" height="916" alt="image" src="https://github.com/user-attachments/assets/3453622e-9108-4ea8-86b8-775335d1542e" />
+
+<img width="1917" height="925" alt="image" src="https://github.com/user-attachments/assets/6e5d2e41-9ef7-4db4-8e7f-03bc28953693" />
+
+<img width="1912" height="922" alt="image" src="https://github.com/user-attachments/assets/80be215b-b6e2-4b5f-a97a-15e6e17d7ac5" />
+
+<img width="1627" height="409" alt="image" src="https://github.com/user-attachments/assets/d507355f-1b8c-429f-b668-31fbbe9532b7" />
+
+<img width="1919" height="919" alt="image" src="https://github.com/user-attachments/assets/59bebd7d-2e50-4977-9403-3925029bff23" />
