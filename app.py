@@ -1,5 +1,4 @@
 import time
-import os
 import streamlit as st
 from frontend.scroll import scroll_smooth_once
 
