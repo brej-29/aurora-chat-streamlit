@@ -1,7 +1,6 @@
 import time
 import os
 import streamlit as st
-from dotenv import load_dotenv
 from frontend.scroll import scroll_smooth_once
 
 
@@ -10,8 +9,7 @@ from backend.genai_backend import (
 )
 
 # ---- Env & client ----
-load_dotenv(override=True)
-API_KEY = os.environ.get("GEMINI_API_KEY")
+API_KEY = st.secrets.get("GEMINI_API_KEY")
 if API_KEY:
     _ = get_client(api_key=API_KEY)
 else:
@@ -52,9 +50,9 @@ def _build_history_prompt(messages, max_turns=6, max_chars=6000) -> str:
     keeps context across requests.
     """
     if not messages:
-        return "You are a helpful AI assistant."
+        return "Your name is Aurora, you are an advanced assistant able to read all file data including image, text, mp3, etc and can do anyhting the gemini model can do. But you are currently only able to generate text."
 
-    blocks = ["You are a helpful AI assistant. The following is the recent chat history.\n"]
+    blocks = ["Your name is Aurora, you are an advanced assistant able to read all file data including image, text, mp3, etc and can do anyhting the gemini model can do. But you are currently only able to generate text. The following is the recent chat history.\n"]
     # only the last N turns
     for m in messages[-max_turns:]:
         role = "User" if m.get("role") == "user" else "Assistant"
@@ -88,8 +86,8 @@ header[data-testid="stHeader"] { display: none !important; }
 .block-container {
   padding-top: 0px;
   padding-bottom: 15px;
-  padding-left: 100px;
-  padding-right: 100px;
+  padding-left: 20px;
+  padding-right: 20px;
   max-width: 1500px;
 }
 
@@ -233,7 +231,7 @@ with right:
     # Add two mini buttons: Clear Pins and Usage
     c1, c2 = st.columns([1,1])
     with c1:
-        if st.button("Clear pinned files", help="Stop sending previous files with new questions"):
+        if st.button("Clear Files", help="Stop sending previous files with new questions"):
             ss.session_file_refs = []
             ss.session_file_ids = set()
             st.rerun()
@@ -256,10 +254,10 @@ if not ss.first_message_sent and len(ss.messages) == 0:
 
     st.markdown('<div class="chips-grid">', unsafe_allow_html=True)
     suggestions = [
+        "What can you do?",
         "What are the advantages of using Next.js?",
         "Write code to demonstrate Dijkstra's algorithm",
-        "Help me write an essay about Silicon Valley",
-        "What is the weather in San Francisco?"
+        "Help me write an essay about Silicon Valley"
     ]
     cols = st.columns(2, gap="large")
     for i, text in enumerate(suggestions):
