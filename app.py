@@ -365,7 +365,7 @@ if ss.get("pending_request"):
                     ph.markdown(full_text)
                     # keep view following while streaming (no timers)
                     #scroll_smooth_once()
-
+            scroll_smooth_once()
             # 3) replace the thinking bubble with the final streamed content in history
             ss.messages.append({
                 "role": "assistant",
@@ -380,7 +380,7 @@ if ss.get("pending_request"):
                 },
                 "ts": time.time()
             })
-
+            
             if final_usage:
                 ss.usage_totals["input"]     += int(final_usage.prompt or 0)
                 ss.usage_totals["output"]    += int(final_usage.response or 0)
