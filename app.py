@@ -16,7 +16,7 @@ else:
     pass
 
 # ------------------ Page setup ------------------
-st.set_page_config(page_title="Gemini Chat", page_icon="💬", layout="wide")
+st.set_page_config(page_title="Aurora Chat", page_icon="💬", layout="wide")
 
 if not API_KEY:
     st.warning("Set GEMINI_API_KEY in your environment (or .env) to use the app.")
